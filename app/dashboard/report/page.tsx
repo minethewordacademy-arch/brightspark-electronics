@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
@@ -236,6 +237,9 @@ export default function ReportPage() {
 
   return (
     <div className="p-6">
+      <Link href="/dashboard" className="text-blue-600 hover:underline text-sm inline-block mb-2">
+        ← Back to Dashboard
+      </Link>
       <h1 className="text-2xl font-bold mb-6">Financial Report</h1>
 
       <div className="mb-6 flex flex-wrap gap-4 items-end bg-white dark:bg-gray-800 p-4 rounded shadow">

@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 interface Expense {
   id: string;
@@ -120,7 +121,6 @@ export default function ExpensesPage() {
   }, [fetchExpenses]);
 
   const handleAdd = () => {
-    // For employees, ensure they have a shop_id; otherwise show error.
     if (userRole !== 'admin' && !userShopId) {
       setError('Your account is not linked to any shop. Please contact admin.');
       return;
@@ -134,7 +134,7 @@ export default function ExpensesPage() {
       shop_id: userRole === 'admin' ? '' : (userShopId || ''),
     });
     setIsModalOpen(true);
-    setError(''); // clear any previous error
+    setError('');
   };
 
   const handleEdit = (expense: Expense) => {
@@ -205,6 +205,11 @@ export default function ExpensesPage() {
 
   return (
     <div className="p-6">
+      {/* Back to Dashboard link */}
+      <Link href="/dashboard" className="text-blue-600 hover:underline text-sm inline-block mb-2">
+        ← Back to Dashboard
+      </Link>
+
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Expenses</h1>
         <button

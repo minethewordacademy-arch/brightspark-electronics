@@ -92,7 +92,7 @@ export default function Dashboard() {
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <Image
-            src="/logo.png"
+            src="/logo.jpeg"
             alt="BrightSpark Electronics Logo"
             width={40}
             height={40}
