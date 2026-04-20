@@ -1,3 +1,4 @@
+//
 import Link from "next/link";
 import Image from "next/image";
 
@@ -12,7 +13,7 @@ export default function Home() {
             <div className="relative h-20 w-20 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center shadow-sm">
               <Image
                 src="/logo.jpeg"
-                alt="BrightSpark Electronics Logo"
+                alt="BrightSpark Electronics Logo" 
                 fill
                 sizes="(max-width: 768px) 48px, 64px"
                 className="object-contain p-2"
@@ -90,7 +91,7 @@ export default function Home() {
         {/* Call to Action */}
         <div className="mt-24 text-center bg-orange-50 dark:bg-gray-800/50 rounded-3xl py-12 px-6">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-            Ready to power up your electronics business?
+            Ready to power up your electronics business now?
           </h2>
           <p className="mt-3 text-gray-600 dark:text-gray-400 max-w-lg mx-auto">
             Join BrightSpark Electronics and manage your shops smarter.
