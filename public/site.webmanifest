@@ -1,0 +1,20 @@
+{
+  "name": "BrightSpark Electronics",
+  "short_name": "BrightSpark",
+  "description": "Inventory & sales management for BrightSpark Electronics",
+  "icons": [
+    {
+      "src": "/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#f97316",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}

@@ -1,0 +1,224 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { useRouter } from 'next/navigation';
+
+interface SaleReport {
+  id: string;
+  product_name: string;
+  quantity: number;
+  price: number;
+  total: number;
+  sold_at: string;
+  shop_name: string;
+}
+
+interface RawSaleData {
+  id: string;
+  quantity: number;
+  selling_price_at_time: number;
+  total_amount: number;
+  sold_at: string;
+  products: { name: string } | null;
+  shops: { name: string } | null;
+}
+
+export default function SalesReportPage() {
+  const [sales, setSales] = useState<SaleReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [filteredSales, setFilteredSales] = useState<SaleReport[]>([]);
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      const role = profile?.role || 'employee';
+      setUserRole(role);
+      if (role !== 'admin') {
+        setSales([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch sales with product and shop names only (no sold_by)
+      const { data, error } = await supabase
+        .from('sales')
+        .select(`
+          id,
+          quantity,
+          selling_price_at_time,
+          total_amount,
+          sold_at,
+          products:product_id ( name ),
+          shops:shop_id ( name )
+        `)
+        .order('sold_at', { ascending: false });
+
+      if (error) {
+        console.error('Sales fetch error:', error);
+        setLoading(false);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const rawData = data as unknown as RawSaleData[];
+        const formatted: SaleReport[] = rawData.map((sale) => ({
+          id: sale.id,
+          product_name: sale.products?.name || 'Unknown Product',
+          quantity: sale.quantity,
+          price: sale.selling_price_at_time,
+          total: sale.total_amount,
+          sold_at: sale.sold_at,
+          shop_name: sale.shops?.name || 'Unknown Shop',
+        }));
+        setSales(formatted);
+        setFilteredSales(formatted);
+      }
+      setLoading(false);
+    };
+    checkRole();
+  }, [router]);
+
+  const handleFilter = () => {
+    if (!startDate && !endDate) {
+      setFilteredSales(sales);
+      return;
+    }
+    let filtered = [...sales];
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(s => new Date(s.sold_at) >= start);
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(s => new Date(s.sold_at) <= end);
+    }
+    setFilteredSales(filtered);
+  };
+
+  // Calculate totals per shop
+  const shopTotals = filteredSales.reduce((acc, sale) => {
+    const shop = sale.shop_name;
+    acc[shop] = (acc[shop] || 0) + sale.total;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const totalSales = filteredSales.reduce((sum, s) => sum + s.total, 0);
+
+  if (loading) return <div className="p-6">Loading...</div>;
+
+  if (userRole !== 'admin') {
+    return (
+      <div className="p-6">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          Access denied. Only administrators can view this page.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-6">Sales Report (All Shops)</h1>
+
+      {/* Filter Bar */}
+      <div className="mb-6 flex flex-wrap gap-4 items-end bg-white dark:bg-gray-800 p-4 rounded shadow">
+        <div>
+          <label className="block text-sm font-medium mb-1">Start Date</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="border p-2 rounded dark:bg-gray-700"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">End Date</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="border p-2 rounded dark:bg-gray-700"
+          />
+        </div>
+        <div>
+          <button
+            onClick={handleFilter}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Filter
+          </button>
+        </div>
+      </div>
+
+      {/* Shop Summary Cards */}
+      <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {Object.entries(shopTotals).map(([shop, total], idx) => {
+          // Alternate subtle background colors for visual distinction
+          const bgColors = ['bg-blue-50 dark:bg-blue-900/20', 'bg-green-50 dark:bg-green-900/20', 'bg-purple-50 dark:bg-purple-900/20'];
+          const borderColors = ['border-blue-200 dark:border-blue-800', 'border-green-200 dark:border-green-800', 'border-purple-200 dark:border-purple-800'];
+          const colorIndex = idx % bgColors.length;
+          return (
+            <div key={shop} className={`p-4 rounded-lg shadow border ${bgColors[colorIndex]} ${borderColors[colorIndex]}`}>
+              <h3 className="font-semibold text-lg">{shop}</h3>
+              <p className="text-2xl font-bold">KES {total.toLocaleString()}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Sales Table */}
+      <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded shadow">
+        <table className="min-w-full">
+          <thead className="bg-gray-100 dark:bg-gray-700">
+            <tr>
+              <th className="px-4 py-2 text-left">Product</th>
+              <th className="px-4 py-2 text-left">Quantity</th>
+              <th className="px-4 py-2 text-left">Unit Price (KES)</th>
+              <th className="px-4 py-2 text-left">Total (KES)</th>
+              <th className="px-4 py-2 text-left">Shop</th>
+              <th className="px-4 py-2 text-left">Date/Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredSales.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-4 text-center text-gray-500">
+                  No sales found
+                </td>
+              </tr>
+            ) : (
+              filteredSales.map(sale => (
+                <tr key={sale.id} className="border-b border-gray-200 dark:border-gray-700">
+                  <td className="px-4 py-2">{sale.product_name}</td>
+                  <td className="px-4 py-2">{sale.quantity}</td>
+                  <td className="px-4 py-2">{sale.price}</td>
+                  <td className="px-4 py-2">{sale.total}</td>
+                  <td className="px-4 py-2">{sale.shop_name}</td>
+                  <td className="px-4 py-2">{new Date(sale.sold_at).toLocaleString()}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        <div className="p-4 text-right font-bold text-lg border-t">
+          Combined Total: KES {totalSales.toLocaleString()}
+        </div>
+      </div>
+    </div>
+  );
+}
