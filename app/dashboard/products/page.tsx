@@ -33,6 +33,7 @@ export default function ProductsPage() {
   const [addStockProduct, setAddStockProduct] = useState<Product | null>(null);
   const [deleteProductId, setDeleteProductId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(""); // 👈 new state for search
   const router = useRouter();
 
   // Fetch user role
@@ -183,6 +184,12 @@ export default function ProductsPage() {
     if (refetch) fetchProductsAndSold();
   };
 
+  // Filter products based on search term (name or SKU)
+  const filteredProducts = products.filter((product) =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.sku.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (loading) return <div className="p-6">Loading products...</div>;
 
   return (
@@ -225,6 +232,17 @@ export default function ProductsPage() {
         </div>
       )}
 
+      {/* Search Input */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="🔍 Search by product name or SKU..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full sm:w-96 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 dark:bg-gray-800"
+        />
+      </div>
+
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
           <thead className="bg-gray-100 dark:bg-gray-700">
@@ -244,57 +262,65 @@ export default function ProductsPage() {
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => {
-              const isLowStock =
-                product.current_stock <= product.low_stock_threshold;
-              const shopName = product.shop?.[0]?.name || product.shop_id;
-              const originalStock =
-                (product.sold_qty || 0) + product.current_stock;
-              return (
-                <tr
-                  key={product.id}
-                  className={`border-b border-gray-200 dark:border-gray-700 ${
-                    isLowStock ? "bg-red-50 dark:bg-red-900/20" : ""
-                  }`}
-                >
-                  <td className="px-4 py-2">{product.name}</td>
-                  <td className="px-4 py-2">{product.sku}</td>
-                  <td className="px-4 py-2">KES {product.buying_price}</td>
-                  <td className="px-4 py-2">KES {product.selling_price}</td>
-                  <td className="px-4 py-2">{originalStock}</td>
-                  <td className="px-4 py-2">{product.sold_qty || 0}</td>
-                  <td className="px-4 py-2">{product.current_stock}</td>
-                  <td className="px-4 py-2">{product.low_stock_threshold}</td>
-                  {userRole === "admin" && (
-                    <td className="px-4 py-2">{shopName}</td>
-                  )}
-                  <td className="px-4 py-2">
-                    <button
-                      onClick={() => handleEditProduct(product)}
-                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 mr-2"
-                    >
-                      Edit
-                    </button>
+            {filteredProducts.length === 0 ? (
+              <tr>
+                <td colSpan={userRole === "admin" ? 10 : 9} className="text-center py-4 text-gray-500">
+                  No products found.
+                </td>
+              </tr>
+            ) : (
+              filteredProducts.map((product) => {
+                const isLowStock =
+                  product.current_stock <= product.low_stock_threshold;
+                const shopName = product.shop?.[0]?.name || product.shop_id;
+                const originalStock =
+                  (product.sold_qty || 0) + product.current_stock;
+                return (
+                  <tr
+                    key={product.id}
+                    className={`border-b border-gray-200 dark:border-gray-700 ${
+                      isLowStock ? "bg-red-50 dark:bg-red-900/20" : ""
+                    }`}
+                  >
+                    <td className="px-4 py-2">{product.name}</td>
+                    <td className="px-4 py-2">{product.sku}</td>
+                    <td className="px-4 py-2">KES {product.buying_price}</td>
+                    <td className="px-4 py-2">KES {product.selling_price}</td>
+                    <td className="px-4 py-2">{originalStock}</td>
+                    <td className="px-4 py-2">{product.sold_qty || 0}</td>
+                    <td className="px-4 py-2">{product.current_stock}</td>
+                    <td className="px-4 py-2">{product.low_stock_threshold}</td>
                     {userRole === "admin" && (
-                      <>
-                        <button
-                          onClick={() => handleAddStock(product)}
-                          className="text-green-600 hover:text-green-800 dark:text-green-400 mr-2"
-                        >
-                          Add Stock
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(product.id)}
-                          className="text-red-600 hover:text-red-800 dark:text-red-400"
-                        >
-                          Delete
-                        </button>
-                      </>
+                      <td className="px-4 py-2">{shopName}</td>
                     )}
-                  </td>
-                </tr>
-              );
-            })}
+                    <td className="px-4 py-2">
+                      <button
+                        onClick={() => handleEditProduct(product)}
+                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 mr-2"
+                      >
+                        Edit
+                      </button>
+                      {userRole === "admin" && (
+                        <>
+                          <button
+                            onClick={() => handleAddStock(product)}
+                            className="text-green-600 hover:text-green-800 dark:text-green-400 mr-2"
+                          >
+                            Add Stock
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(product.id)}
+                            className="text-red-600 hover:text-red-800 dark:text-red-400"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

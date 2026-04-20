@@ -26,11 +26,13 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'BrightSpark',
   },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-  },
+};
+
+// Separate viewport export (required in Next.js 16)
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
