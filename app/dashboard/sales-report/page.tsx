@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link'; // added for back navigation
 
 interface SaleReport {
   id: string;
@@ -139,6 +140,10 @@ export default function SalesReportPage() {
 
   return (
     <div className="p-6">
+      {/* Back to Dashboard link */}
+      <Link href="/dashboard" className="text-blue-600 hover:underline text-sm inline-block mb-2">
+        ← Back to Dashboard
+      </Link>
       <h1 className="text-2xl font-bold mb-6">Sales Report (All Shops)</h1>
 
       {/* Filter Bar */}
@@ -202,7 +207,7 @@ export default function SalesReportPage() {
         })}
       </div>
 
-      {/* Sales Table (now includes payment method column) */}
+      {/* Sales Table */}
       <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded shadow">
         <table className="min-w-full">
           <thead className="bg-gray-100 dark:bg-gray-700">

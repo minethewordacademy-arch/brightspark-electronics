@@ -17,6 +17,7 @@ interface CartItem {
   name: string;
   quantity: number;
   price: number;
+  payment_method: 'cash' | 'till'; // payment method per item
 }
 
 interface SaleRecord {
@@ -45,7 +46,6 @@ export default function SalesPage() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [customPrice, setCustomPrice] = useState<number | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'till'>('cash');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -145,6 +145,7 @@ export default function SalesPage() {
       return;
     }
     const price = customPrice !== null ? customPrice : product.selling_price;
+    // Default payment method for new cart item: 'cash' (can be changed per item)
     const existingIndex = cart.findIndex(item => item.product_id === selectedProductId && item.price === price);
     if (existingIndex !== -1) {
       const newCart = [...cart];
@@ -156,6 +157,7 @@ export default function SalesPage() {
         name: product.name,
         quantity,
         price,
+        payment_method: 'cash',
       }]);
     }
     setSelectedProductId('');
@@ -171,6 +173,12 @@ export default function SalesPage() {
     } else {
       newCart[index].quantity = newQuantity;
     }
+    setCart(newCart);
+  };
+
+  const updateCartItemPayment = (index: number, method: 'cash' | 'till') => {
+    const newCart = [...cart];
+    newCart[index].payment_method = method;
     setCart(newCart);
   };
 
@@ -236,7 +244,7 @@ export default function SalesPage() {
           shop_id: shopId,
           sold_by: user.id,
           sold_at: new Date(),
-          payment_method: paymentMethod,
+          payment_method: item.payment_method,
         });
       if (insertError) {
         errors.push(`Failed to record sale for ${item.name}`);
@@ -361,7 +369,7 @@ export default function SalesPage() {
             </div>
           </div>
 
-          {/* Cart and payment method */}
+          {/* Cart with per‑item payment method selection */}
           <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
             <h2 className="text-xl font-semibold mb-4">Cart</h2>
             {cart.length === 0 ? (
@@ -370,57 +378,61 @@ export default function SalesPage() {
               <>
                 <ul className="divide-y divide-gray-200 dark:divide-gray-700 mb-4">
                   {cart.map((item, idx) => (
-                    <li key={idx} className="py-2 flex justify-between items-center">
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {item.quantity} × KES {item.price} = KES {item.quantity * item.price}
-                        </p>
+                    <li key={idx} className="py-2">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-medium">{item.name}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {item.quantity} × KES {item.price} = KES {item.quantity * item.price}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.quantity}
+                            onChange={(e) => updateCartItem(idx, parseInt(e.target.value) || 0)}
+                            className="w-20 border p-1 rounded dark:bg-gray-700"
+                          />
+                          <button
+                            onClick={() => updateCartItem(idx, 0)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.quantity}
-                          onChange={(e) => updateCartItem(idx, parseInt(e.target.value) || 0)}
-                          className="w-20 border p-1 rounded dark:bg-gray-700"
-                        />
-                        <button
-                          onClick={() => updateCartItem(idx, 0)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          Remove
-                        </button>
+                      <div className="mt-2">
+                        <label className="block text-sm font-medium mb-1">Payment Method</label>
+                        <div className="flex gap-4">
+                          <label className="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name={`payment-${idx}`}
+                              value="cash"
+                              checked={item.payment_method === 'cash'}
+                              onChange={() => updateCartItemPayment(idx, 'cash')}
+                              className="mr-2"
+                            />
+                            💵 Cash
+                          </label>
+                          <label className="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name={`payment-${idx}`}
+                              value="till"
+                              checked={item.payment_method === 'till'}
+                              onChange={() => updateCartItemPayment(idx, 'till')}
+                              className="mr-2"
+                            />
+                            📱 Till (M-PESA)
+                          </label>
+                        </div>
                       </div>
                     </li>
                   ))}
                 </ul>
                 <div className="border-t pt-3">
-                  <div className="mb-3">
-                    <label className="block text-sm font-medium mb-2">Payment Method</label>
-                    <div className="flex gap-4">
-                      <label className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          value="cash"
-                          checked={paymentMethod === 'cash'}
-                          onChange={() => setPaymentMethod('cash')}
-                          className="mr-2"
-                        />
-                        💵 Cash
-                      </label>
-                      <label className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          value="till"
-                          checked={paymentMethod === 'till'}
-                          onChange={() => setPaymentMethod('till')}
-                          className="mr-2"
-                        />
-                        📱 Till (M-PESA)
-                      </label>
-                    </div>
-                  </div>
                   <p className="text-right font-bold text-lg">
                     Total: KES {cart.reduce((sum, item) => sum + item.quantity * item.price, 0)}
                   </p>
