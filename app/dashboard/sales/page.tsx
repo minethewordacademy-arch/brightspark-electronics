@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link'; // added import
 
 interface Product {
   id: string;
@@ -25,6 +26,7 @@ interface SaleRecord {
   price: number;
   total: number;
   sold_at: string;
+  payment_method: string;
 }
 
 interface RawSale {
@@ -33,6 +35,7 @@ interface RawSale {
   selling_price_at_time: number;
   total_amount: number;
   sold_at: string;
+  payment_method: string;
   products: { name: string } | null;
 }
 
@@ -42,6 +45,7 @@ export default function SalesPage() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [customPrice, setCustomPrice] = useState<number | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'till'>('cash');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -50,7 +54,6 @@ export default function SalesPage() {
   const [todaysTotal, setTodaysTotal] = useState(0);
   const router = useRouter();
 
-  // Fetch today's sales (employee)
   const fetchTodaysSales = async (userId: string) => {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
@@ -62,6 +65,7 @@ export default function SalesPage() {
         selling_price_at_time,
         total_amount,
         sold_at,
+        payment_method,
         products ( name )
       `)
       .eq('sold_by', userId)
@@ -74,6 +78,7 @@ export default function SalesPage() {
         price: sale.selling_price_at_time,
         total: sale.total_amount,
         sold_at: sale.sold_at,
+        payment_method: sale.payment_method || 'cash',
       }));
       setTodaysSales(formatted);
       const total = formatted.reduce((sum, s) => sum + s.total, 0);
@@ -81,7 +86,6 @@ export default function SalesPage() {
     }
   };
 
-  // Fetch current user role and then today's sales (if employee)
   useEffect(() => {
     const fetchRole = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -105,7 +109,6 @@ export default function SalesPage() {
     fetchRole();
   }, [router]);
 
-  // Fetch products
   useEffect(() => {
     const fetchProducts = async () => {
       const { data, error } = await supabase
@@ -227,6 +230,7 @@ export default function SalesPage() {
           shop_id: shopId,
           sold_by: user.id,
           sold_at: new Date(),
+          payment_method: paymentMethod,
         });
       if (insertError) {
         errors.push(`Failed to record sale for ${item.name}`);
@@ -259,122 +263,153 @@ export default function SalesPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Record Sales</h1>
+      {/* Sticky top section */}
+      <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 py-2">
+        <Link href="/dashboard" className="text-blue-600 hover:underline text-sm inline-block mb-2">
+          ← Back to Dashboard
+        </Link>
+        <h1 className="text-2xl font-bold mb-4">Record Sales</h1>
 
-      {message && (
-        <div className={`mb-4 p-3 rounded ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-          {message.text}
-        </div>
-      )}
+        {message && (
+          <div className={`mb-4 p-3 rounded ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+            {message.text}
+          </div>
+        )}
 
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Add to cart form */}
-        <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
-          <h2 className="text-xl font-semibold mb-4">Add Item</h2>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium mb-1">Product</label>
-              <select
-                value={selectedProductId}
-                onChange={(e) => setSelectedProductId(e.target.value)}
-                className="w-full border p-2 rounded dark:bg-gray-700"
-              >
-                <option value="">-- Select product --</option>
-                {products.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} (Stock: {p.current_stock}, Price: KES {p.selling_price})
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selectedProduct && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Quantity</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={selectedProduct.current_stock}
-                    value={quantity}
-                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                    className="w-full border p-2 rounded dark:bg-gray-700"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Available: {selectedProduct.current_stock}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Selling Price (KES)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={customPrice !== null ? customPrice : selectedProduct.selling_price}
-                    onChange={(e) => setCustomPrice(parseFloat(e.target.value) || 0)}
-                    className="w-full border p-2 rounded dark:bg-gray-700"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Default: KES {selectedProduct.selling_price}</p>
-                </div>
-                <button
-                  onClick={addToCart}
-                  className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Add to cart form */}
+          <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
+            <h2 className="text-xl font-semibold mb-4">Add Item</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Product</label>
+                <select
+                  value={selectedProductId}
+                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  className="w-full border p-2 rounded dark:bg-gray-700"
                 >
-                  Add to Cart
-                </button>
+                  <option value="">-- Select product --</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} (Stock: {p.current_stock}, Price: KES {p.selling_price})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {selectedProduct && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Quantity</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={selectedProduct.current_stock}
+                      value={quantity}
+                      onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                      className="w-full border p-2 rounded dark:bg-gray-700"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Available: {selectedProduct.current_stock}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Selling Price (KES)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={customPrice !== null ? customPrice : selectedProduct.selling_price}
+                      onChange={(e) => setCustomPrice(parseFloat(e.target.value) || 0)}
+                      className="w-full border p-2 rounded dark:bg-gray-700"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Default: KES {selectedProduct.selling_price}</p>
+                  </div>
+                  <button
+                    onClick={addToCart}
+                    className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                  >
+                    Add to Cart
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Cart and payment method */}
+          <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
+            <h2 className="text-xl font-semibold mb-4">Cart</h2>
+            {cart.length === 0 ? (
+              <p className="text-gray-500">No items added</p>
+            ) : (
+              <>
+                <ul className="divide-y divide-gray-200 dark:divide-gray-700 mb-4">
+                  {cart.map((item, idx) => (
+                    <li key={idx} className="py-2 flex justify-between items-center">
+                      <div>
+                        <p className="font-medium">{item.name}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {item.quantity} × KES {item.price} = KES {item.quantity * item.price}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={item.quantity}
+                          onChange={(e) => updateCartItem(idx, parseInt(e.target.value) || 0)}
+                          className="w-20 border p-1 rounded dark:bg-gray-700"
+                        />
+                        <button
+                          onClick={() => updateCartItem(idx, 0)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="border-t pt-3">
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium mb-2">Payment Method</label>
+                    <div className="flex gap-4">
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          value="cash"
+                          checked={paymentMethod === 'cash'}
+                          onChange={() => setPaymentMethod('cash')}
+                          className="mr-2"
+                        />
+                        💵 Cash
+                      </label>
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          value="till"
+                          checked={paymentMethod === 'till'}
+                          onChange={() => setPaymentMethod('till')}
+                          className="mr-2"
+                        />
+                        📱 Till (M-PESA)
+                      </label>
+                    </div>
+                  </div>
+                  <p className="text-right font-bold text-lg">
+                    Total: KES {cart.reduce((sum, item) => sum + item.quantity * item.price, 0)}
+                  </p>
+                  <button
+                    onClick={completeSale}
+                    disabled={submitting}
+                    className="w-full mt-3 bg-green-600 text-white py-2 rounded hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {submitting ? 'Processing...' : 'Complete Sale'}
+                  </button>
+                </div>
               </>
             )}
           </div>
         </div>
-
-        {/* Cart */}
-        <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
-          <h2 className="text-xl font-semibold mb-4">Cart</h2>
-          {cart.length === 0 ? (
-            <p className="text-gray-500">No items added</p>
-          ) : (
-            <>
-              <ul className="divide-y divide-gray-200 dark:divide-gray-700 mb-4">
-                {cart.map((item, idx) => (
-                  <li key={idx} className="py-2 flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">{item.name}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {item.quantity} × KES {item.price} = KES {item.quantity * item.price}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        value={item.quantity}
-                        onChange={(e) => updateCartItem(idx, parseInt(e.target.value) || 0)}
-                        className="w-20 border p-1 rounded dark:bg-gray-700"
-                      />
-                      <button
-                        onClick={() => updateCartItem(idx, 0)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="border-t pt-3">
-                <p className="text-right font-bold text-lg">
-                  Total: KES {cart.reduce((sum, item) => sum + item.quantity * item.price, 0)}
-                </p>
-                <button
-                  onClick={completeSale}
-                  disabled={submitting}
-                  className="w-full mt-3 bg-green-600 text-white py-2 rounded hover:bg-green-700 disabled:opacity-50"
-                >
-                  {submitting ? 'Processing...' : 'Complete Sale'}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
       </div>
 
-      {/* Today's Sales Summary for Employee */}
+      {/* Today's Sales Summary for Employee (non-sticky) */}
       <div className="mt-8 bg-white dark:bg-gray-800 p-4 rounded shadow">
         <h2 className="text-xl font-semibold mb-4">Today&apos;s Sales (Your Records)</h2>
         {todaysSales.length === 0 ? (
@@ -388,6 +423,7 @@ export default function SalesPage() {
                   <th className="text-left">Qty</th>
                   <th className="text-left">Unit Price</th>
                   <th className="text-left">Total</th>
+                  <th className="text-left">Payment</th>
                   <th className="text-left">Time</th>
                 </tr>
               </thead>
@@ -395,10 +431,11 @@ export default function SalesPage() {
                 {todaysSales.map(sale => (
                   <tr key={sale.id} className="border-b">
                     <td className="py-1">{sale.product_name}</td>
-                    <td>{sale.quantity}</td>
-                    <td>KES {sale.price}</td>
-                    <td>KES {sale.total}</td>
-                    <td>{new Date(sale.sold_at).toLocaleTimeString()}</td>
+                    <td className="py-1">{sale.quantity}</td>
+                    <td className="py-1">KES {sale.price}</td>
+                    <td className="py-1">KES {sale.total}</td>
+                    <td className="py-1">{sale.payment_method === 'cash' ? '💵 Cash' : '📱 Till'}</td>
+                    <td className="py-1">{new Date(sale.sold_at).toLocaleTimeString()}</td>
                   </tr>
                 ))}
               </tbody>

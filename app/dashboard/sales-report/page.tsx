@@ -11,6 +11,7 @@ interface SaleReport {
   total: number;
   sold_at: string;
   shop_name: string;
+  payment_method: string;
 }
 
 interface RawSaleData {
@@ -19,6 +20,7 @@ interface RawSaleData {
   selling_price_at_time: number;
   total_amount: number;
   sold_at: string;
+  payment_method: string;
   products: { name: string } | null;
   shops: { name: string } | null;
 }
@@ -52,7 +54,6 @@ export default function SalesReportPage() {
         return;
       }
 
-      // Fetch sales with product and shop names only (no sold_by)
       const { data, error } = await supabase
         .from('sales')
         .select(`
@@ -61,6 +62,7 @@ export default function SalesReportPage() {
           selling_price_at_time,
           total_amount,
           sold_at,
+          payment_method,
           products:product_id ( name ),
           shops:shop_id ( name )
         `)
@@ -82,6 +84,7 @@ export default function SalesReportPage() {
           total: sale.total_amount,
           sold_at: sale.sold_at,
           shop_name: sale.shops?.name || 'Unknown Shop',
+          payment_method: sale.payment_method || 'cash',
         }));
         setSales(formatted);
         setFilteredSales(formatted);
@@ -110,14 +113,17 @@ export default function SalesReportPage() {
     setFilteredSales(filtered);
   };
 
-  // Calculate totals per shop
+  // Totals per shop
   const shopTotals = filteredSales.reduce((acc, sale) => {
     const shop = sale.shop_name;
     acc[shop] = (acc[shop] || 0) + sale.total;
     return acc;
   }, {} as Record<string, number>);
 
-  const totalSales = filteredSales.reduce((sum, s) => sum + s.total, 0);
+  // Totals by payment method
+  const cashTotal = filteredSales.filter(s => s.payment_method === 'cash').reduce((sum, s) => sum + s.total, 0);
+  const tillTotal = filteredSales.filter(s => s.payment_method === 'till').reduce((sum, s) => sum + s.total, 0);
+  const totalSales = cashTotal + tillTotal;
 
   if (loading) return <div className="p-6">Loading...</div>;
 
@@ -165,10 +171,25 @@ export default function SalesReportPage() {
         </div>
       </div>
 
+      {/* Payment Method Summary Cards */}
+      <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="p-4 rounded-lg shadow border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
+          <h3 className="font-semibold text-lg">💵 Cash Sales</h3>
+          <p className="text-2xl font-bold">KES {cashTotal.toLocaleString()}</p>
+        </div>
+        <div className="p-4 rounded-lg shadow border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+          <h3 className="font-semibold text-lg">📱 Till (M-PESA)</h3>
+          <p className="text-2xl font-bold">KES {tillTotal.toLocaleString()}</p>
+        </div>
+        <div className="p-4 rounded-lg shadow border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
+          <h3 className="font-semibold text-lg">💰 Combined Total</h3>
+          <p className="text-2xl font-bold">KES {totalSales.toLocaleString()}</p>
+        </div>
+      </div>
+
       {/* Shop Summary Cards */}
       <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {Object.entries(shopTotals).map(([shop, total], idx) => {
-          // Alternate subtle background colors for visual distinction
           const bgColors = ['bg-blue-50 dark:bg-blue-900/20', 'bg-green-50 dark:bg-green-900/20', 'bg-purple-50 dark:bg-purple-900/20'];
           const borderColors = ['border-blue-200 dark:border-blue-800', 'border-green-200 dark:border-green-800', 'border-purple-200 dark:border-purple-800'];
           const colorIndex = idx % bgColors.length;
@@ -181,7 +202,7 @@ export default function SalesReportPage() {
         })}
       </div>
 
-      {/* Sales Table */}
+      {/* Sales Table (now includes payment method column) */}
       <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded shadow">
         <table className="min-w-full">
           <thead className="bg-gray-100 dark:bg-gray-700">
@@ -190,6 +211,7 @@ export default function SalesReportPage() {
               <th className="px-4 py-2 text-left">Quantity</th>
               <th className="px-4 py-2 text-left">Unit Price (KES)</th>
               <th className="px-4 py-2 text-left">Total (KES)</th>
+              <th className="px-4 py-2 text-left">Payment</th>
               <th className="px-4 py-2 text-left">Shop</th>
               <th className="px-4 py-2 text-left">Date/Time</th>
             </tr>
@@ -197,7 +219,7 @@ export default function SalesReportPage() {
           <tbody>
             {filteredSales.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-4 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-4 text-center text-gray-500">
                   No sales found
                 </td>
               </tr>
@@ -208,6 +230,7 @@ export default function SalesReportPage() {
                   <td className="px-4 py-2">{sale.quantity}</td>
                   <td className="px-4 py-2">{sale.price}</td>
                   <td className="px-4 py-2">{sale.total}</td>
+                  <td className="px-4 py-2">{sale.payment_method === 'cash' ? '💵 Cash' : '📱 Till'}</td>
                   <td className="px-4 py-2">{sale.shop_name}</td>
                   <td className="px-4 py-2">{new Date(sale.sold_at).toLocaleString()}</td>
                 </tr>

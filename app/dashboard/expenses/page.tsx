@@ -11,7 +11,7 @@ interface Expense {
   category: string;
   date: string;
   shop_id: string;
-  shop: { name: string }[] | null;
+  shops: { name: string } | null;
 }
 
 interface RawExpense {
@@ -21,7 +21,15 @@ interface RawExpense {
   category: string;
   date: string;
   shop_id: string;
-  shop: { name: string }[] | null;
+  shops: { name: string } | null;
+}
+
+interface CartExpense {
+  description: string;
+  amount: number;
+  category: string;
+  date: string;
+  shop_id: string;
 }
 
 export default function ExpensesPage() {
@@ -35,6 +43,19 @@ export default function ExpensesPage() {
   const [endDate, setEndDate] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
+
+  // Cart state
+  const [expenseCart, setExpenseCart] = useState<CartExpense[]>([]);
+  const [cartFormData, setCartFormData] = useState({
+    description: '',
+    amount: '',
+    category: '',
+    date: new Date().toISOString().split('T')[0],
+    shop_id: '',
+  });
+  const [cartError, setCartError] = useState('');
+
+  // Modal for editing existing expense
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [formData, setFormData] = useState({
@@ -46,6 +67,10 @@ export default function ExpensesPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Confirmation modal for submitting cart
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
   const router = useRouter();
 
   // Fetch user role and shop
@@ -67,10 +92,13 @@ export default function ExpensesPage() {
       if (role === 'admin') {
         const { data: shopsData } = await supabase.from('shops').select('id, name');
         if (shopsData) setShops(shopsData);
+        setCartFormData(prev => ({ ...prev, shop_id: '' }));
+      } else {
+        setCartFormData(prev => ({ ...prev, shop_id: userShopId || '' }));
       }
     };
     fetchUser();
-  }, [router]);
+  }, [router, userShopId]);
 
   // Fetch expenses based on filters
   const fetchExpenses = useCallback(async () => {
@@ -82,7 +110,7 @@ export default function ExpensesPage() {
       category,
       date,
       shop_id,
-      shop:shop_id ( name )
+      shops:shop_id ( name )
     `);
 
     if (userRole === 'admin') {
@@ -120,21 +148,84 @@ export default function ExpensesPage() {
     fetchExpenses();
   }, [fetchExpenses]);
 
-  const handleAdd = () => {
-    if (userRole !== 'admin' && !userShopId) {
-      setError('Your account is not linked to any shop. Please contact admin.');
+  const addToCart = () => {
+    if (!cartFormData.description || !cartFormData.amount) {
+      setCartError('Description and amount are required');
       return;
     }
-    setEditingExpense(null);
-    setFormData({
+    const amountNum = parseFloat(cartFormData.amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setCartError('Amount must be a positive number');
+      return;
+    }
+    let shopIdToUse = cartFormData.shop_id;
+    if (userRole === 'admin') {
+      if (!shopIdToUse || shopIdToUse === '') {
+        setCartError('Please select a shop');
+        return;
+      }
+    } else {
+      if (!userShopId) {
+        setCartError('Your account is not linked to a shop. Contact admin.');
+        return;
+      }
+      shopIdToUse = userShopId;
+    }
+    setCartError('');
+    setExpenseCart([
+      ...expenseCart,
+      {
+        description: cartFormData.description,
+        amount: amountNum,
+        category: cartFormData.category || '',
+        date: cartFormData.date,
+        shop_id: shopIdToUse,
+      },
+    ]);
+    // Reset form
+    setCartFormData({
       description: '',
       amount: '',
       category: '',
-      date: new Date().toISOString().split('T')[0],
+      date: cartFormData.date,
       shop_id: userRole === 'admin' ? '' : (userShopId || ''),
     });
-    setIsModalOpen(true);
-    setError('');
+  };
+
+  const removeFromCart = (index: number) => {
+    const newCart = [...expenseCart];
+    newCart.splice(index, 1);
+    setExpenseCart(newCart);
+  };
+
+  const submitAllExpenses = async () => {
+    if (expenseCart.length === 0) return;
+    const invalidItems = expenseCart.filter(item => !item.shop_id);
+    if (invalidItems.length > 0) {
+      alert(`Please ensure all items have a shop selected. Invalid items: ${invalidItems.map(i => i.description).join(', ')}`);
+      return;
+    }
+    setSubmitting(true);
+    const errors: string[] = [];
+    for (const item of expenseCart) {
+      const { error } = await supabase.from('expenses').insert({
+        description: item.description,
+        amount: item.amount,
+        category: item.category || null,
+        date: item.date,
+        shop_id: item.shop_id,
+      });
+      if (error) errors.push(`${item.description}: ${error.message}`);
+    }
+    if (errors.length > 0) {
+      alert(`Some expenses failed:\n${errors.join('\n')}`);
+    } else {
+      alert(`${expenseCart.length} expense(s) added successfully!`);
+      setExpenseCart([]);
+      fetchExpenses();
+    }
+    setSubmitting(false);
+    setShowConfirmModal(false);
   };
 
   const handleEdit = (expense: Expense) => {
@@ -157,7 +248,7 @@ export default function ExpensesPage() {
     else fetchExpenses();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError('');
@@ -170,18 +261,13 @@ export default function ExpensesPage() {
       shop_id: formData.shop_id,
     };
 
-    let result;
-    if (editingExpense) {
-      result = await supabase
-        .from('expenses')
-        .update(expenseData)
-        .eq('id', editingExpense.id);
-    } else {
-      result = await supabase.from('expenses').insert([expenseData]);
-    }
+    const { error } = await supabase
+      .from('expenses')
+      .update(expenseData)
+      .eq('id', editingExpense!.id);
 
-    if (result.error) {
-      setError(result.error.message);
+    if (error) {
+      setError(error.message);
     } else {
       setIsModalOpen(false);
       fetchExpenses();
@@ -193,7 +279,7 @@ export default function ExpensesPage() {
     if (userRole !== 'admin') return null;
     const totals: Record<string, number> = {};
     expenses.forEach(exp => {
-      const shopName = exp.shop?.[0]?.name || exp.shop_id;
+      const shopName = exp.shops?.name || exp.shop_id;
       totals[shopName] = (totals[shopName] || 0) + exp.amount;
     });
     return totals;
@@ -205,71 +291,188 @@ export default function ExpensesPage() {
 
   return (
     <div className="p-6">
-      {/* Back to Dashboard link */}
-      <Link href="/dashboard" className="text-blue-600 hover:underline text-sm inline-block mb-2">
-        ← Back to Dashboard
-      </Link>
+      {/* Sticky header container */}
+      <div className="sticky top-0 z-10 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-sm -mx-6 px-6 pt-2 pb-4 mb-4 rounded-b-lg shadow-sm">
+        <Link href="/dashboard" className="text-blue-600 hover:underline text-sm inline-block mb-2">
+          ← Back to Dashboard
+        </Link>
 
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Expenses</h1>
-        <button
-          onClick={handleAdd}
-          className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700"
-        >
-          + Add Expense
-        </button>
-      </div>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Expenses</h1>
+        </div>
 
-      {/* Filters */}
-      <div className="mb-6 flex flex-wrap gap-4 items-end bg-white dark:bg-gray-800 p-4 rounded shadow">
-        {userRole === 'admin' && shops.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium mb-1">Shop</label>
-            <select
-              value={filterShopId}
-              onChange={(e) => setFilterShopId(e.target.value)}
-              className="border p-2 rounded dark:bg-gray-700"
-            >
-              <option value="">All Shops</option>
-              {shops.map(shop => (
-                <option key={shop.id} value={shop.id}>{shop.name}</option>
-              ))}
-            </select>
+        {/* Cart Section */}
+        <div className="mb-8 bg-white dark:bg-gray-800 p-4 rounded shadow">
+          <h2 className="text-xl font-semibold mb-4">📋 Add Multiple Expenses (Cart)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+            <div>
+              <label className="block text-sm font-medium mb-1">Description</label>
+              <input
+                type="text"
+                value={cartFormData.description}
+                onChange={(e) => setCartFormData({ ...cartFormData, description: e.target.value })}
+                className="w-full border p-2 rounded dark:bg-gray-700"
+                placeholder="e.g., Rent, Electricity"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Amount (KES)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={cartFormData.amount}
+                onChange={(e) => setCartFormData({ ...cartFormData, amount: e.target.value })}
+                className="w-full border p-2 rounded dark:bg-gray-700"
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Category</label>
+              <input
+                type="text"
+                value={cartFormData.category}
+                onChange={(e) => setCartFormData({ ...cartFormData, category: e.target.value })}
+                className="w-full border p-2 rounded dark:bg-gray-700"
+                placeholder="e.g., Utilities"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Date</label>
+              <input
+                type="date"
+                value={cartFormData.date}
+                onChange={(e) => setCartFormData({ ...cartFormData, date: e.target.value })}
+                className="w-full border p-2 rounded dark:bg-gray-700"
+              />
+            </div>
+            {userRole === 'admin' && shops.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Shop</label>
+                <select
+                  value={cartFormData.shop_id}
+                  onChange={(e) => setCartFormData({ ...cartFormData, shop_id: e.target.value })}
+                  className="w-full border p-2 rounded dark:bg-gray-700"
+                >
+                  <option value="">Select shop</option>
+                  {shops.map(shop => (
+                    <option key={shop.id} value={shop.id}>{shop.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div>
+              <button
+                onClick={addToCart}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full"
+              >
+                + Add to Cart
+              </button>
+            </div>
           </div>
-        )}
-        <div>
-          <label className="block text-sm font-medium mb-1">From</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="border p-2 rounded dark:bg-gray-700"
-          />
+          {cartError && <p className="text-red-500 text-sm mt-2">{cartError}</p>}
+
+          {expenseCart.length > 0 && (
+            <div className="mt-4">
+              <h3 className="font-semibold mb-2">Cart Items ({expenseCart.length})</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-100 dark:bg-gray-700">
+                    <tr>
+                      <th className="px-2 py-1 text-left">Description</th>
+                      <th className="px-2 py-1 text-left">Amount</th>
+                      <th className="px-2 py-1 text-left">Category</th>
+                      <th className="px-2 py-1 text-left">Date</th>
+                      {userRole === 'admin' && <th className="px-2 py-1 text-left">Shop</th>}
+                      <th className="px-2 py-1 text-left">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expenseCart.map((item, idx) => {
+                      const shopName = userRole === 'admin' ? shops.find(s => s.id === item.shop_id)?.name || item.shop_id : '';
+                      return (
+                        <tr key={idx} className="border-b">
+                          <td className="px-2 py-1">{item.description}</td>
+                          <td className="px-2 py-1">KES {item.amount}</td>
+                          <td className="px-2 py-1">{item.category || '-'}</td>
+                          <td className="px-2 py-1">{item.date}</td>
+                          {userRole === 'admin' && <td className="px-2 py-1">{shopName}</td>}
+                          <td className="px-2 py-1">
+                            <button
+                              onClick={() => removeFromCart(idx)}
+                              className="text-red-600 hover:text-red-800 text-sm"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-3 text-right">
+                <button
+                  onClick={() => setShowConfirmModal(true)}
+                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                >
+                  Submit All ({expenseCart.length} expenses)
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">To</label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="border p-2 rounded dark:bg-gray-700"
-          />
-        </div>
-        {categories.length > 0 && (
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-4 items-end bg-white dark:bg-gray-800 p-4 rounded shadow">
+          {userRole === 'admin' && shops.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Shop</label>
+              <select
+                value={filterShopId}
+                onChange={(e) => setFilterShopId(e.target.value)}
+                className="border p-2 rounded dark:bg-gray-700"
+              >
+                <option value="">All Shops</option>
+                {shops.map(shop => (
+                  <option key={shop.id} value={shop.id}>{shop.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
-            <label className="block text-sm font-medium mb-1">Category</label>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+            <label className="block text-sm font-medium mb-1">From</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
               className="border p-2 rounded dark:bg-gray-700"
-            >
-              <option value="">All Categories</option>
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
+            />
           </div>
-        )}
+          <div>
+            <label className="block text-sm font-medium mb-1">To</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="border p-2 rounded dark:bg-gray-700"
+            />
+          </div>
+          {categories.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Category</label>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="border p-2 rounded dark:bg-gray-700"
+              >
+                <option value="">All Categories</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Shop Summary Cards (Admin only) */}
@@ -289,7 +492,7 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* Expenses Table */}
+      {/* Expenses Table (existing expenses) */}
       <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded shadow">
         <table className="min-w-full">
           <thead className="bg-gray-100 dark:bg-gray-700">
@@ -311,7 +514,7 @@ export default function ExpensesPage() {
               </tr>
             ) : (
               expenses.map(exp => {
-                const shopName = exp.shop?.[0]?.name || exp.shop_id;
+                const shopName = exp.shops?.name || exp.shop_id;
                 return (
                   <tr key={exp.id} className="border-b border-gray-200 dark:border-gray-700">
                     <td className="px-4 py-2">{new Date(exp.date).toLocaleDateString()}</td>
@@ -344,12 +547,12 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Edit Existing Expense Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">{editingExpense ? 'Edit Expense' : 'Add Expense'}</h2>
-            <form onSubmit={handleSubmit}>
+            <h2 className="text-xl font-bold mb-4">Edit Expense</h2>
+            <form onSubmit={handleUpdate}>
               <div className="mb-3">
                 <label className="block text-sm font-medium mb-1">Description</label>
                 <input
@@ -377,7 +580,6 @@ export default function ExpensesPage() {
                   type="text"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  placeholder="e.g., Rent, Salary, Utilities"
                   className="w-full border p-2 rounded dark:bg-gray-700"
                 />
               </div>
@@ -417,6 +619,33 @@ export default function ExpensesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for submitting cart */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Confirm Submit</h2>
+            <p className="mb-4">
+              Are you sure you want to submit {expenseCart.length} expense(s)? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="px-4 py-2 border rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitAllExpenses}
+                disabled={submitting}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                {submitting ? 'Submitting...' : 'Yes, Submit All'}
+              </button>
+            </div>
           </div>
         </div>
       )}
