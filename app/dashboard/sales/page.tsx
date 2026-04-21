@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link'; // added import
+import Link from 'next/link';
 
 interface Product {
   id: string;
@@ -52,6 +52,7 @@ export default function SalesPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [todaysSales, setTodaysSales] = useState<SaleRecord[]>([]);
   const [todaysTotal, setTodaysTotal] = useState(0);
+  const [searchTerm, setSearchTerm] = useState(''); // 👈 search state for today's sales
   const router = useRouter();
 
   const fetchTodaysSales = async (userId: string) => {
@@ -249,6 +250,11 @@ export default function SalesPage() {
     setSubmitting(false);
   };
 
+  // Filter today's sales by product name (case-insensitive)
+  const filteredTodaysSales = todaysSales.filter(sale =>
+    sale.product_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (loading) return <div className="p-6">Loading...</div>;
 
   if (userRole === 'admin') {
@@ -412,34 +418,48 @@ export default function SalesPage() {
       {/* Today's Sales Summary for Employee (non-sticky) */}
       <div className="mt-8 bg-white dark:bg-gray-800 p-4 rounded shadow">
         <h2 className="text-xl font-semibold mb-4">Today&apos;s Sales (Your Records)</h2>
-        {todaysSales.length === 0 ? (
-          <p className="text-gray-500">No sales recorded today.</p>
+
+        {/* Search input for today's sales */}
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="🔍 Search by product name..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full sm:w-80 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 dark:bg-gray-800"
+          />
+        </div>
+
+        {filteredTodaysSales.length === 0 ? (
+          <p className="text-gray-500">No matching sales found.</p>
         ) : (
           <>
-            <table className="min-w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2">Product</th>
-                  <th className="text-left">Qty</th>
-                  <th className="text-left">Unit Price</th>
-                  <th className="text-left">Total</th>
-                  <th className="text-left">Payment</th>
-                  <th className="text-left">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {todaysSales.map(sale => (
-                  <tr key={sale.id} className="border-b">
-                    <td className="py-1">{sale.product_name}</td>
-                    <td className="py-1">{sale.quantity}</td>
-                    <td className="py-1">KES {sale.price}</td>
-                    <td className="py-1">KES {sale.total}</td>
-                    <td className="py-1">{sale.payment_method === 'cash' ? '💵 Cash' : '📱 Till'}</td>
-                    <td className="py-1">{new Date(sale.sold_at).toLocaleTimeString()}</td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">Product</th>
+                    <th className="text-left">Qty</th>
+                    <th className="text-left">Unit Price</th>
+                    <th className="text-left">Total</th>
+                    <th className="text-left">Payment</th>
+                    <th className="text-left">Time</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredTodaysSales.map(sale => (
+                    <tr key={sale.id} className="border-b">
+                      <td className="py-1">{sale.product_name}</td>
+                      <td className="py-1">{sale.quantity}</td>
+                      <td className="py-1">KES {sale.price}</td>
+                      <td className="py-1">KES {sale.total}</td>
+                      <td className="py-1">{sale.payment_method === 'cash' ? '💵 Cash' : '📱 Till'}</td>
+                      <td className="py-1">{new Date(sale.sold_at).toLocaleTimeString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div className="text-right font-bold mt-3">
               Total Today: KES {todaysTotal}
             </div>
