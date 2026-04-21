@@ -17,7 +17,7 @@ interface CartItem {
   name: string;
   quantity: number;
   price: number;
-  payment_method: 'cash' | 'till'; // payment method per item
+  payment_method: 'cash' | 'till';
 }
 
 interface SaleRecord {
@@ -53,6 +53,7 @@ export default function SalesPage() {
   const [todaysSales, setTodaysSales] = useState<SaleRecord[]>([]);
   const [todaysTotal, setTodaysTotal] = useState(0);
   const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [saleDate, setSaleDate] = useState<string>(() => new Date().toISOString().split('T')[0]); // YYYY-MM-DD
   const router = useRouter();
 
   const fetchTodaysSales = async (userId: string) => {
@@ -145,7 +146,6 @@ export default function SalesPage() {
       return;
     }
     const price = customPrice !== null ? customPrice : product.selling_price;
-    // Default payment method for new cart item: 'cash' (can be changed per item)
     const existingIndex = cart.findIndex(item => item.product_id === selectedProductId && item.price === price);
     if (existingIndex !== -1) {
       const newCart = [...cart];
@@ -209,6 +209,11 @@ export default function SalesPage() {
     }
     const shopId = profile.shop_id;
 
+    // Build the sale timestamp using the selected date at 12:00:00 (noon)
+    const selectedDate = new Date(saleDate);
+    selectedDate.setHours(12, 0, 0, 0);
+    const saleTimestamp = selectedDate.toISOString();
+
     const errors: string[] = [];
     for (const item of cart) {
       const { data: product, error: fetchError } = await supabase
@@ -243,7 +248,7 @@ export default function SalesPage() {
           total_amount: item.price * item.quantity,
           shop_id: shopId,
           sold_by: user.id,
-          sold_at: new Date(),
+          sold_at: saleTimestamp,
           payment_method: item.payment_method,
         });
       if (insertError) {
@@ -287,7 +292,19 @@ export default function SalesPage() {
         <Link href="/dashboard" className="text-blue-600 hover:underline text-sm inline-block mb-2">
           ← Back to Dashboard
         </Link>
-        <h1 className="text-2xl font-bold mb-4">Record Sales</h1>
+        <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
+          <h1 className="text-2xl font-bold">Record Sales</h1>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">Sale Date:</label>
+            <input
+              type="date"
+              value={saleDate}
+              onChange={(e) => setSaleDate(e.target.value)}
+              className="border p-1 rounded dark:bg-gray-800"
+              max={new Date().toISOString().split('T')[0]} // cannot select future dates
+            />
+          </div>
+        </div>
 
         {message && (
           <div className={`mb-4 p-3 rounded ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -450,7 +467,7 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* Today's Sales Summary */}
+      {/* Today's Sales Summary (current day) */}
       <div className="mt-8 bg-white dark:bg-gray-800 p-4 rounded shadow">
         <h2 className="text-xl font-semibold mb-4">Today&apos;s Sales (Your Records)</h2>
         {todaysSales.length === 0 ? (
