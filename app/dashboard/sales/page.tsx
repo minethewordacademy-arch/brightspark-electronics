@@ -52,7 +52,7 @@ export default function SalesPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [todaysSales, setTodaysSales] = useState<SaleRecord[]>([]);
   const [todaysTotal, setTodaysTotal] = useState(0);
-  const [searchTerm, setSearchTerm] = useState(''); // 👈 search state for today's sales
+  const [productSearchTerm, setProductSearchTerm] = useState('');
   const router = useRouter();
 
   const fetchTodaysSales = async (userId: string) => {
@@ -125,6 +125,11 @@ export default function SalesPage() {
     };
     fetchProducts();
   }, []);
+
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+    product.sku.toLowerCase().includes(productSearchTerm.toLowerCase())
+  );
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
@@ -250,10 +255,10 @@ export default function SalesPage() {
     setSubmitting(false);
   };
 
-  // Filter today's sales by product name (case-insensitive)
-  const filteredTodaysSales = todaysSales.filter(sale =>
-    sale.product_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const selectProduct = (product: Product) => {
+    setSelectedProductId(product.id);
+    setProductSearchTerm('');
+  };
 
   if (loading) return <div className="p-6">Loading...</div>;
 
@@ -283,28 +288,47 @@ export default function SalesPage() {
         )}
 
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Add to cart form */}
+          {/* Add item section with searchable product list */}
           <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
             <h2 className="text-xl font-semibold mb-4">Add Item</h2>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Product</label>
-                <select
-                  value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(e.target.value)}
+                <label className="block text-sm font-medium mb-1">Search Product</label>
+                <input
+                  type="text"
+                  placeholder="🔍 Type name or SKU..."
+                  value={productSearchTerm}
+                  onChange={(e) => setProductSearchTerm(e.target.value)}
                   className="w-full border p-2 rounded dark:bg-gray-700"
-                >
-                  <option value="">-- Select product --</option>
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} (Stock: {p.current_stock}, Price: KES {p.selling_price})
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
+
+              {productSearchTerm && (
+                <div className="max-h-60 overflow-y-auto border rounded p-2 space-y-2">
+                  {filteredProducts.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No products found.</p>
+                  ) : (
+                    filteredProducts.map(product => (
+                      <div
+                        key={product.id}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer border"
+                        onClick={() => selectProduct(product)}
+                      >
+                        <div className="font-medium">{product.name}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          SKU: {product.sku} | Stock: {product.current_stock} | Price: KES {product.selling_price}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
               {selectedProduct && (
-                <>
-                  <div>
+                <div className="mt-4 p-3 border rounded bg-gray-50 dark:bg-gray-700">
+                  <p className="font-medium">Selected: {selectedProduct.name}</p>
+                  <p className="text-sm">SKU: {selectedProduct.sku} | Stock: {selectedProduct.current_stock}</p>
+                  <div className="mt-2">
                     <label className="block text-sm font-medium mb-1">Quantity</label>
                     <input
                       type="number"
@@ -314,9 +338,8 @@ export default function SalesPage() {
                       onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
                       className="w-full border p-2 rounded dark:bg-gray-700"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Available: {selectedProduct.current_stock}</p>
                   </div>
-                  <div>
+                  <div className="mt-2">
                     <label className="block text-sm font-medium mb-1">Selling Price (KES)</label>
                     <input
                       type="number"
@@ -329,11 +352,11 @@ export default function SalesPage() {
                   </div>
                   <button
                     onClick={addToCart}
-                    className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                    className="w-full mt-3 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
                   >
                     Add to Cart
                   </button>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -415,23 +438,11 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* Today's Sales Summary for Employee (non-sticky) */}
+      {/* Today's Sales Summary */}
       <div className="mt-8 bg-white dark:bg-gray-800 p-4 rounded shadow">
         <h2 className="text-xl font-semibold mb-4">Today&apos;s Sales (Your Records)</h2>
-
-        {/* Search input for today's sales */}
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="🔍 Search by product name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full sm:w-80 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 dark:bg-gray-800"
-          />
-        </div>
-
-        {filteredTodaysSales.length === 0 ? (
-          <p className="text-gray-500">No matching sales found.</p>
+        {todaysSales.length === 0 ? (
+          <p className="text-gray-500">No sales recorded today.</p>
         ) : (
           <>
             <div className="overflow-x-auto">
@@ -447,7 +458,7 @@ export default function SalesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTodaysSales.map(sale => (
+                  {todaysSales.map(sale => (
                     <tr key={sale.id} className="border-b">
                       <td className="py-1">{sale.product_name}</td>
                       <td className="py-1">{sale.quantity}</td>
