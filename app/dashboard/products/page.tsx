@@ -15,7 +15,7 @@ interface Product {
   current_stock: number;
   low_stock_threshold: number;
   shop_id: string;
-  shop: { name: string }[] | null;
+  shops: { name: string }[] | null; // array (Supabase returns array)
   sold_qty?: number;
 }
 
@@ -66,7 +66,7 @@ export default function ProductsPage() {
         current_stock,
         low_stock_threshold,
         shop_id,
-        shop:shop_id ( name )
+        shops:shop_id ( name )
       `);
     if (productsError) {
       console.error(productsError);
@@ -184,7 +184,7 @@ export default function ProductsPage() {
     ];
 
     const rows = filteredProducts.map(product => {
-      const shopName = product.shop?.[0]?.name || product.shop_id;
+      const shopName = product.shops?.[0]?.name || product.shop_id;
       const originalStock = (product.sold_qty || 0) + product.current_stock;
       return [
         product.name,
@@ -215,7 +215,7 @@ export default function ProductsPage() {
 
   return (
     <div className="p-6">
-      {/* Sticky top container (no alerts) */}
+      {/* Sticky top container */}
       <div className="sticky top-0 z-10 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-sm -mx-6 px-6 pt-2 pb-4 mb-4 rounded-b-lg shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <div>
@@ -281,7 +281,7 @@ export default function ProductsPage() {
             ) : (
               filteredProducts.map(product => {
                 const isLowStock = product.current_stock <= product.low_stock_threshold;
-                const shopName = product.shop?.[0]?.name || product.shop_id;
+                const shopName = product.shops?.[0]?.name || product.shop_id;
                 const originalStock = (product.sold_qty || 0) + product.current_stock;
                 return (
                   <tr
@@ -331,7 +331,7 @@ export default function ProductsPage() {
         </table>
       </div>
 
-      {/* Low Stock Alerts – moved below the table */}
+      {/* Low Stock Alerts */}
       {products.some(p => p.current_stock <= p.low_stock_threshold) && (
         <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
           <h2 className="font-semibold text-red-800 dark:text-red-300">⚠️ Low Stock Alerts</h2>

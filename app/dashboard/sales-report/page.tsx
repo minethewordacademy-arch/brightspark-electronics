@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link'; // added for back navigation
+import Link from 'next/link';
 
 interface SaleReport {
   id: string;
@@ -114,17 +114,19 @@ export default function SalesReportPage() {
     setFilteredSales(filtered);
   };
 
-  // Totals per shop
-  const shopTotals = filteredSales.reduce((acc, sale) => {
-    const shop = sale.shop_name;
-    acc[shop] = (acc[shop] || 0) + sale.total;
-    return acc;
-  }, {} as Record<string, number>);
-
-  // Totals by payment method
+  // Global totals by payment method
   const cashTotal = filteredSales.filter(s => s.payment_method === 'cash').reduce((sum, s) => sum + s.total, 0);
   const tillTotal = filteredSales.filter(s => s.payment_method === 'till').reduce((sum, s) => sum + s.total, 0);
   const totalSales = cashTotal + tillTotal;
+
+  // Per‑shop totals by payment method
+  const shopPaymentTotals = filteredSales.reduce((acc, sale) => {
+    const shop = sale.shop_name;
+    if (!acc[shop]) acc[shop] = { cash: 0, till: 0 };
+    if (sale.payment_method === 'cash') acc[shop].cash += sale.total;
+    else acc[shop].till += sale.total;
+    return acc;
+  }, {} as Record<string, { cash: number; till: number }>);
 
   if (loading) return <div className="p-6">Loading...</div>;
 
@@ -140,7 +142,6 @@ export default function SalesReportPage() {
 
   return (
     <div className="p-6">
-      {/* Back to Dashboard link */}
       <Link href="/dashboard" className="text-blue-600 hover:underline text-sm inline-block mb-2">
         ← Back to Dashboard
       </Link>
@@ -176,14 +177,14 @@ export default function SalesReportPage() {
         </div>
       </div>
 
-      {/* Payment Method Summary Cards */}
+      {/* Global Payment Method Summary Cards */}
       <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="p-4 rounded-lg shadow border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
-          <h3 className="font-semibold text-lg">💵 Cash Sales</h3>
+          <h3 className="font-semibold text-lg">💵 Cash Sales (All Shops)</h3>
           <p className="text-2xl font-bold">KES {cashTotal.toLocaleString()}</p>
         </div>
         <div className="p-4 rounded-lg shadow border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
-          <h3 className="font-semibold text-lg">📱 Till (M-PESA)</h3>
+          <h3 className="font-semibold text-lg">📱 Till (M-PESA) (All Shops)</h3>
           <p className="text-2xl font-bold">KES {tillTotal.toLocaleString()}</p>
         </div>
         <div className="p-4 rounded-lg shadow border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
@@ -192,16 +193,20 @@ export default function SalesReportPage() {
         </div>
       </div>
 
-      {/* Shop Summary Cards */}
+      {/* Per‑Shop Detailed Cards (Cash + Till) */}
       <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Object.entries(shopTotals).map(([shop, total], idx) => {
+        {Object.entries(shopPaymentTotals).map(([shop, totals], idx) => {
           const bgColors = ['bg-blue-50 dark:bg-blue-900/20', 'bg-green-50 dark:bg-green-900/20', 'bg-purple-50 dark:bg-purple-900/20'];
           const borderColors = ['border-blue-200 dark:border-blue-800', 'border-green-200 dark:border-green-800', 'border-purple-200 dark:border-purple-800'];
           const colorIndex = idx % bgColors.length;
           return (
             <div key={shop} className={`p-4 rounded-lg shadow border ${bgColors[colorIndex]} ${borderColors[colorIndex]}`}>
               <h3 className="font-semibold text-lg">{shop}</h3>
-              <p className="text-2xl font-bold">KES {total.toLocaleString()}</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-sm">💵 Cash: <span className="font-bold">KES {totals.cash.toLocaleString()}</span></p>
+                <p className="text-sm">📱 Till: <span className="font-bold">KES {totals.till.toLocaleString()}</span></p>
+                <p className="text-sm border-t pt-1 mt-1">💰 Total: <span className="font-bold">KES {(totals.cash + totals.till).toLocaleString()}</span></p>
+              </div>
             </div>
           );
         })}
