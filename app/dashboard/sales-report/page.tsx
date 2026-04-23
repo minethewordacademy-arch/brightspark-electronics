@@ -35,6 +35,9 @@ export default function SalesReportPage() {
   const [filteredSales, setFilteredSales] = useState<SaleReport[]>([]);
   const router = useRouter();
 
+  // Set the earliest allowed date (system start date)
+  const minDate = '2026-03-04';
+
   useEffect(() => {
     const checkRole = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -155,6 +158,7 @@ export default function SalesReportPage() {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
+            min={minDate}
             className="border p-2 rounded dark:bg-gray-700"
           />
         </div>
@@ -164,6 +168,7 @@ export default function SalesReportPage() {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
+            min={minDate}
             className="border p-2 rounded dark:bg-gray-700"
           />
         </div>

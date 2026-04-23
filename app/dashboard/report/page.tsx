@@ -33,7 +33,6 @@ interface MonthlySummary {
   tithe: number;
 }
 
-// Define chart data point type
 interface ChartDataPoint {
   period: string;
   sales: number;
@@ -52,6 +51,8 @@ export default function ReportPage() {
   const [summaryData, setSummaryData] = useState<MonthlySummary[]>([]);
   const [totals, setTotals] = useState({ sales: 0, expenses: 0, net: 0, tithe: 0 });
   const router = useRouter();
+
+  const minDate = '2026-03-04';
 
   // Check admin role
   useEffect(() => {
@@ -74,10 +75,13 @@ export default function ReportPage() {
       const { data: shopsData } = await supabase.from('shops').select('id, name');
       if (shopsData) setShops(shopsData);
       const end = new Date();
-      const start = new Date();
+      // Set start date to 12 months ago, but not earlier than minDate
+      const start = new Date(); // ✅ changed from 'let' to 'const'
       start.setMonth(start.getMonth() - 12);
+      let startStr = start.toISOString().split('T')[0];
+      if (startStr < minDate) startStr = minDate;
       setDateRange({
-        start: start.toISOString().split('T')[0],
+        start: startStr,
         end: end.toISOString().split('T')[0],
       });
     };
@@ -226,7 +230,6 @@ export default function ReportPage() {
 
   if (loading) return <div className="p-6">Loading report...</div>;
 
-  // Tooltip formatter with correct Recharts signature
   const formatTooltipValue = (
     value: number | string | readonly (number | string)[] | undefined,
   ) => {
@@ -262,6 +265,7 @@ export default function ReportPage() {
             type="date"
             value={dateRange.start}
             onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+            min={minDate}
             className="border p-2 rounded dark:bg-gray-700"
           />
         </div>
@@ -271,6 +275,7 @@ export default function ReportPage() {
             type="date"
             value={dateRange.end}
             onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+            min={minDate}
             className="border p-2 rounded dark:bg-gray-700"
           />
         </div>
